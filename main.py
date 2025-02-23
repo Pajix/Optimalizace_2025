@@ -1,4 +1,5 @@
 import pandas as pd
+import openpyxl
 
 # Načti data z Excel souboru
 df = pd.read_excel('Zakaznici.xlsx')
