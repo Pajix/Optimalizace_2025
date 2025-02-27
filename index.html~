@@ -12,11 +12,11 @@
             height: 100vh;
         }
         #map {
-            width: 35%;
+            width: 40%;
             height: 100%;
         }
         #info {
-            width: 65%;
+            width: 60%;
             height: 100%;
             background-color: white;
             padding: 20px;
