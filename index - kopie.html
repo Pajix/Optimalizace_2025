@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>Mapa Zákazníků</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        body {
+            display: flex;
+            margin: 0;
+            height: 100vh;
+        }
+        #map {
+            width: 30%;
+            height: 100%;
+        }
+        #info {
+            width: 70%;
+            height: 100%;
+            background-color: white;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #dddddd;
+            text-align: left;
+            padding: 8px;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        button {
+            margin-top: 20px;
+            padding: 10px 15px;
+        }
+        .summary {
+            font-weight: bold;
+            background-color: #e9e9e9;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="info">
+        <table id="customerTable">
+            <thead>
+                <tr>
+                    <th>Zakaznik</th>
+                    <th>Latitude</th>
+                    <th>Longitude</th>
+                    <th>Od</th>
+                    <th>Do</th>
+                    <th>Pocet</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr data-name="DEPO">
+                    <td>DEPO</td>
+                    <td>49.9696583</td>
+                    <td>14.5732181</td>
+                    <td>00:01</td>
+                    <td>23:59</td>
+                    <td>0</td>
+                </tr>
+                <tr data-name="DEPO">
+                    <td>DEPO</td>
+                    <td>49.9696583</td>
+                    <td>14.5732181</td>
+                    <td>00:01</td>
+                    <td>23:59</td>
+                    <td>0</td>
+                </tr>
+            </tbody>
+            <tfoot>
+                <tr class="summary">
+                    <td id="totalCustomers">Celkový počet zákazníků: 0</td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td id="totalCount">Suma počtů: 0</td>
+                </tr>
+            </tfoot>
+        </table>
+        <button id="createRouteButton">Vytvoř trasu</button>
+        <button id="deleteRouteButton">Smaž trasu</button>
+        <table id="routeSummary" style="margin-top: 20px;">
+            <thead>
+                <tr>
+                    <th>Navštívený zákazník</th>
+                    <th>Vzdálenost (km)</th>
+                    <th>Doba trvání (min)</th>
+                </tr>
+            </thead>
+            <tbody id="summaryTableBody">
+                <!-- Přehled tras bude mít zde -->
+            </tbody>
+            <tfoot class="summary">
+                <tr>
+                    <td>Celková vzdálenost: <span id="totalDistance">0</span> km</td>
+                    <td>Celkový čas: <span id="totalDuration">0</span> min</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        // Inicializace mapy
+        const map = L.map('map').setView([49.9696583, 14.5732181], 9);
+        const customerTableBody = document.getElementById('customerTable').getElementsByTagName('tbody')[0];
+        const summaryTableBody = document.getElementById('summaryTableBody');
+        const addedCustomers = new Set();
+        let polyline;
+
+        // Přidání OpenStreetMap vrstvy
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap'
+        }).addTo(map);
+
+        // Načtení dat ze souboru zakaznici.json
+        fetch('Herink_objednavky_leden.json')
+            .then(response => response.json())
+            .then(data => {
+                data.forEach(zakaznik => {
+                    const marker = createMarker(zakaznik);
+                    marker.addTo(map);
+                    marker.zakaznik = zakaznik;
+
+                    marker.on('click', () => {
+                        toggleCustomerInTable(marker);
+                    });
+                });
+            })
+            .catch(error => console.error('Chyba při načítání dat:', error));
+
+        // Vytvoření značky jako kroužku
+        function createMarker(zakaznik) {
+            return L.circleMarker([zakaznik.Latitude, zakaznik.Longitude], {
+                radius: 8,
+                fillColor: 'blue',
+                color: 'blue',
+                weight: 1,
+                opacity: 1,
+                fillOpacity: 0.6
+            });
+        }
+
+        // Přidání nebo odstranění zákazníka z tabulky
+        function toggleCustomerInTable(marker) {
+            const zakaznik = marker.zakaznik;
+            const customerIdentifier = zakaznik.Zakaznik;
+
+            if (addedCustomers.has(customerIdentifier)) {
+                removeCustomerFromTable(customerIdentifier);
+                addedCustomers.delete(customerIdentifier);
+                marker.setStyle({ fillColor: 'blue', color: 'blue' });
+            } else {
+                addCustomerToTable(zakaznik);
+                addedCustomers.add(customerIdentifier);
+                marker.setStyle({ fillColor: 'red', color: 'red' });
+            }
+        }
+
+        // Přidání zákazníka do tabulky
+        function addCustomerToTable(zakaznik) {
+            const newRow = customerTableBody.insertRow(1); // Vložení na druhé místo
+            newRow.setAttribute('data-name', zakaznik.Zakaznik);
+            newRow.insertCell(0).innerText = zakaznik.Zakaznik;
+            newRow.insertCell(1).innerText = zakaznik.Latitude;
+            newRow.insertCell(2).innerText = zakaznik.Longitude;
+            newRow.insertCell(3).innerText = zakaznik.Od;
+            newRow.insertCell(4).innerText = zakaznik.Do;
+            newRow.insertCell(5).innerText = zakaznik.Pocet;
+            updateSummaries();
+        }
+
+        // Odstranění zákazníka z tabulky
+        function removeCustomerFromTable(customerIdentifier) {
+            const rows = customerTableBody.getElementsByTagName('tr');
+            for (let i = 1; i < rows.length; i++) {
+                if (rows[i].getAttribute('data-name') === customerIdentifier) {
+                    customerTableBody.deleteRow(i);
+                    break;
+                }
+            }
+            updateSummaries();
+        }
+
+        // Funkce pro vytvoření trasy
+        document.getElementById('createRouteButton').addEventListener('click', () => {
+            const routeWaypoints = [];
+            const rows = customerTableBody.getElementsByTagName('tr');
+            for (let i = 0; i < rows.length; i++) {
+                const cells = rows[i].getElementsByTagName('td');
+                if (cells.length > 0) {
+                    const latitude = cells[1].innerText;
+                    const longitude = cells[2].innerText;
+                    routeWaypoints.push([longitude, latitude]);
+                }
+            }
+
+            if (routeWaypoints.length < 2) {
+                alert('Musíte přidat alespoň dva zákazníky pro vytvoření trasy.');
+                return;
+            }
+
+            if (polyline) {
+                map.removeLayer(polyline);
+            }
+
+            const routeUrl = `https://router.project-osrm.org/route/v1/driving/${routeWaypoints.join(';')}?overview=full&geometries=geojson`;
+
+            fetch(routeUrl)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.routes && data.routes.length > 0) {
+                        const route = data.routes[0];
+                        const routeGeoJSON = route.geometry;
+                        polyline = L.polyline(L.GeoJSON.coordsToLatLngs(routeGeoJSON.coordinates, 0), { color: 'green' }).addTo(map);
+                        map.fitBounds(polyline.getBounds());
+
+                        updateRouteSummary(route);  // Opravená funkce pro aktualizaci tabulky
+                    } else {
+                        alert('Nepodařilo se vytvořit trasu. Zkontrolujte souřadnice.');
+                    }
+                })
+                .catch(error => {
+                    console.error('Chyba při vytváření trasy:', error);
+                });
+        });
+
+        function updateRouteSummary(route) {
+            summaryTableBody.innerHTML = ''; // Vymazání předchozího obsahu
+            let totalDistance = 0; // Celková vzdálenost
+            let totalDuration = 0; // Celková doba trvání
+
+            // Přidání informací o trase do přehledu
+            const legs = route.legs;
+            legs.forEach((leg, index) => {
+                const distanceKm = (leg.distance / 1000).toFixed(2);
+                const durationMin = (leg.duration / 60).toFixed(2);
+
+                // Přidání DEPO jako prvního zákazníka
+                if (index === 0) {
+                    const newRow = summaryTableBody.insertRow();
+                    newRow.insertCell(0).innerText = 'DEPO';
+                    newRow.insertCell(1).innerText = distanceKm;
+                    newRow.insertCell(2).innerText = durationMin;
+                }
+
+                // Získání jména zákazníka z tabulky
+                const customerName = customerTableBody.getElementsByTagName('tr')[index + 1]?.getAttribute('data-name') || 'Unknown';
+                const newRow = summaryTableBody.insertRow();
+                newRow.insertCell(0).innerText = customerName;
+                newRow.insertCell(1).innerText = distanceKm;
+                newRow.insertCell(2).innerText = durationMin;
+
+                totalDistance += parseFloat(distanceKm);
+                totalDuration += parseFloat(durationMin);
+            });
+
+            document.getElementById('totalDistance').innerText = totalDistance.toFixed(2);
+            document.getElementById('totalDuration').innerText = totalDuration.toFixed(2);
+        }
+
+        // Funkce pro smazání trasy
+        document.getElementById('deleteRouteButton').addEventListener('click', () => {
+            if (polyline) {
+                map.removeLayer(polyline);
+                polyline = null;
+                summaryTableBody.innerHTML = ''; // Vymazání přehledu trasy
+                document.getElementById('totalDistance').innerText = '0';
+                document.getElementById('totalDuration').innerText = '0';
+            } else {
+                alert('Žádná trasa k odstranění!');
+            }
+        });
+
+        // Funkce pro aktualizaci souhrnů
+        function updateSummaries() {
+            const rows = customerTableBody.getElementsByTagName('tr');
+            let totalCustomers = 0;
+            let totalCount = 0;
+
+            for (let i = 0; i < rows.length; i++) {
+                const cells = rows[i].getElementsByTagName('td');
+                if (cells.length > 0) {
+                    totalCustomers++;
+                    const countValue = parseInt(cells[5].innerText, 10);
+                    totalCount += isNaN(countValue) ? 0 : countValue;
+                }
+            }
+
+            // Odčítání výchozích řádků
+            totalCustomers -= 2; // Odečtení výchozích řádků
+
+            // Aktualizace zobrazení v souhrnném řádku
+            document.getElementById('totalCustomers').innerText = `Celkový počet zákazníků: ${totalCustomers}`;
+            document.getElementById('totalCount').innerText = `Suma počtů: ${totalCount}`;
+        }
+    </script>
+</body>
+</html>
